@@ -1,0 +1,707 @@
+
+//Appends the selected items to the selected items list.
+proc AppendSelectedItems(){
+    string $selected[] = `textScrollList -q -selectItem availableControlsList`;
+    string $existingItems[] = `textScrollList -q -allItems selectedControlsList`;
+      
+    $selected = stringArrayRemove ($existingItems , $selected);
+
+    for( $each in $selected ){
+            textScrollList -e -append $each selectedControlsList;
+            textScrollList -e -deselectAll availableControlsList;
+    }
+}
+
+//Deletes them from the list.
+proc DeleteSelectedItems(){
+    string $selected[] = `textScrollList -q -selectItem selectedControlsList`;
+    for ( $each in $selected ) {
+    textScrollList -e -removeItem $each selectedControlsList;
+    }
+}
+
+//Creates the text needed for each controls.
+proc CreateTextCurves(string $font, string $text){
+           string $deleteGrp[] = `textCurves -ch 0 -f $font -t $text`;
+           string $select[];
+           $select = `listRelatives -ad -type "nurbsCurve" `;
+           select $select; 
+           group -name ($text +"_Text");
+           parent -w;
+           setAttr ("|"+ $text + "_Text.overrideEnabled" ) 1;
+           setAttr ("|"+ $text + "_Text.overrideDisplayType" )2;
+           makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+           delete $deleteGrp;
+           
+           xform -cp;
+           move -rpr -xy 4 0 ;
+           makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+}
+
+// Locks the attribute for the control thats passed as argument to it.
+proc LockAttr(string $control , string $attribute){
+    setAttr -lock true -keyable false -channelBox false ($control + $attribute);
+}
+
+//Creates the movable control box
+proc string CreateControlBox(string $baseName , string $controlPosition , string $isRect){
+    string $curve;
+    $curve = `curve -d 1 -p -0.5 0.5 0 -p 0.5 0.5 0 -p 0.5 -0.5 0 -p -0.5 -0.5 0 -p -0.5 0.5 0 -k 0 -k 1 -k 2 -k 3 -k 4 `;
+    rename $curve ($baseName + "_Ctrl");
+    xform -cp;
+    
+    switch ( $controlPosition ) {
+        case "Left":
+        if($isRect == "true"){
+            move -r -4.5 0 0;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0; 
+            transformLimits -tx 0 9 -ty -3 3 -etx 1 1 -ety 1 1 ($baseName + "_Ctrl");
+
+        }
+        else {
+            move -r -3 0 0;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -tx 0 6 -ty -3 3 -etx 1 1 -ety 1 1 ($baseName + "_Ctrl");
+            
+        }
+        break;
+        case "Right":
+        if($isRect == "true"){
+            move -r 4.5 0 0;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0; 
+            transformLimits -tx -9 0 -ty -4.5 4.5 -etx 1 1 -ety 1 1 ($baseName + "_Ctrl");
+        }
+        else {
+            move -r 3 0 0;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -tx -6 0 -ty -3 3 -etx 1 1 -ety 1 1 ($baseName + "_Ctrl");
+        }
+        break;
+        case "Center":
+        if($isRect == "true") {
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -tx -4.5 4.5 -ty -3 3 -etx 1 1 -ety 1 1 ($baseName + "_Ctrl");
+        }
+        else {
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -tx -3 3 -ty -3 3 -etx 1 1 -ety 1 1 ($baseName + "_Ctrl");
+        }
+        break;
+        case "Up":
+        if($isRect == "true") {
+            move -r 0 3 0;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -tx -4.5 4.5 -ty -6 0 -etx 1 1 -ety 1 1 ($baseName + "_Ctrl");
+        }
+        else {
+            move -r 0 3 0;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -tx -3 3 -ty -6 0 -etx 1 1 -ety 1 1 ($baseName + "_Ctrl");
+        }
+        break;
+        case "Down":
+        if($isRect == "true") {
+            move -r 0 -3 0;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -tx -4.5 4.5 -ty 0 6 -etx 1 1 -ety 1 1 ($baseName + "_Ctrl");
+
+        }
+        else {
+            move -r 0 -3 0;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -tx -3 3 -ty 0 6 -etx 1 1 -ety 1 1 ($baseName + "_Ctrl");
+        }
+        break;
+        
+    }
+
+        LockAttr($baseName + "_Ctrl",".tz");
+        LockAttr($baseName + "_Ctrl",".rx");
+        LockAttr($baseName + "_Ctrl",".ry");
+        LockAttr($baseName + "_Ctrl",".rz");
+        LockAttr($baseName + "_Ctrl",".sx");
+        LockAttr($baseName + "_Ctrl",".sy");
+        LockAttr($baseName + "_Ctrl",".sz");
+        LockAttr($baseName + "_Ctrl",".v");
+        
+    return $curve;
+}
+
+//Creates the Slider Control group.
+proc CreateSlider( string $sliderGrpName, string $controlPosition) {
+    string $curve;
+    $curve = `curve -d 1 -p -0.5 3 0 -p 0.5 3 0 -p 0.5 -3 0 -p -0.5 -3 0 -p -0.5 3 0 -k 0 -k 1 -k 2 -k 3 -k 4 `;
+    toggle -state on -template;
+    rename $curve ( $sliderGrpName + "_Base" );
+    $curve = `curve -d 1 -p -0.6 0.6 0 -p 0.6 0.6 0 -p 0.6 -0.5 0 -p -0.6 -0.5 0 -p -0.6 0.6 0 -k 0 -k 1 -k 2 -k 3 -k 4` ;
+    rename $curve ($sliderGrpName + "_Ctrl" );
+    
+    switch ($controlPosition) {
+        case "Up":
+            move -r 0 3 0;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -ty -6 0 -ety 1 1 ($sliderGrpName + "_Ctrl" );
+        break;
+        case "Center":
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -ty -3 3 -ety 1 1 ($sliderGrpName + "_Ctrl" );
+        break;
+        case "Down":
+            move -r 0 -3 0;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+            transformLimits -ty 0 6 -ety 1 1 ($sliderGrpName + "_Ctrl" );
+        break;
+    }
+    
+    LockAttr($sliderGrpName + "_Ctrl" , ".tx");
+    LockAttr($sliderGrpName + "_Ctrl" , ".v");
+    LockAttr($sliderGrpName + "_Ctrl" , ".tz");
+    LockAttr($sliderGrpName + "_Ctrl" , ".rx");
+    LockAttr($sliderGrpName + "_Ctrl" , ".ry");
+    LockAttr($sliderGrpName + "_Ctrl" , ".rz");
+    LockAttr($sliderGrpName + "_Ctrl" , ".sx");
+    LockAttr($sliderGrpName + "_Ctrl" , ".sy");
+    LockAttr($sliderGrpName + "_Ctrl" , ".sz");
+    
+    select ( $sliderGrpName + "_Base" ) ($sliderGrpName + "_Ctrl" );
+    group -name ($sliderGrpName + "_Base_Grp" );
+}
+
+//Creates the Base box for the Box type control and calls the CreateControlBox to create the control.
+proc  CreateBaseBox( string $isRect, string $controlPosition, string $baseName) {
+    string $curve;
+    if( $isRect == "false") {
+        $curve = `curve -d 1 -p -3 3 0 -p 3 3 0 -p 3 -3 0 -p -3 -3 0 -p -3 3 0 -k 0 -k 1 -k 2 -k 3 -k 4` ;
+    }
+    else {
+        $curve = `curve -d 1 -p -4.5 3 0 -p 4.5 3 0 -p 4.5 -3 0 -p -4.5 -3 0 -p -4.5 3 0 -k 0 -k 1 -k 2 -k 3 -k 4 `;
+    }
+
+    rename $curve ( $baseName+"_Base" ) ;
+    toggle -state on -template;
+    makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+        
+    $curve = CreateControlBox( $baseName , $controlPosition , $isRect);
+    
+    select ($baseName+"_Base") ($baseName+"_Ctrl");
+    group -name ($baseName + "_Base_Grp");
+}
+
+//Checks what all controls are selected and creates them accordingly.
+proc CreateControl( string $controlName ){
+    string $grpName;
+
+    switch($controlName) {
+        
+        case "Mouth":
+        if(!`objExists Mouth_Ctrl_Grp`) {
+            CreateBaseBox("false", "Right", "Mouth_R_Box"); 
+            move -r -os -wd -4 0 0 ;
+            
+            CreateBaseBox("false","Left", "Mouth_L_Box");
+            move -r -os -wd 4 0 0 ;    
+            
+            CreateTextCurves("Rod|w300|h-6","R");
+            move -rpr -xy -4 0 ;
+            
+            CreateTextCurves("Rod|w300|h-6","L");
+            move -rpr -xy 4 0 ;
+        
+            CreateTextCurves("Rod|w300|h-6","Mouth");
+            move -rpr -xy 0 4.5 ;
+        
+            select Mouth_R_Box_Base_Grp Mouth_L_Box_Base_Grp R_Text L_Text Mouth_Text;
+            group -name "Mouth_Ctrl_Grp";
+            select -cl;
+        }
+        break; 
+        case "Jaw":
+        if(!`objExists JawCtrl_Grp`) {
+            CreateBaseBox("false","Center", "Jaw_Box");  
+             
+            CreateTextCurves("Rod|w300|h-6","Jaw");
+            move -rpr -xy 0 4.5 ;
+
+            select Jaw_Box_Base_Grp Jaw_Text ;
+            group -name "JawCtrl_Grp";
+        
+            move -r 0 -10 0;
+            select -cl;
+        }
+        break;         
+        case "JawDrop":
+        
+        if(!`objExists JawDrop_Grp`) {
+            CreateSlider("JawDrop_Slider", "Up");
+            
+            CreateTextCurves("Rod|w300|h-6","JawDrop");
+            move -rpr -xy 0 4.5;
+            
+            select JawDrop_Slider_Base_Grp JawDrop_Text;
+            group -name "JawDrop_Grp";
+            
+            move -r -8 -10 0;
+           select -cl;
+        }
+        break;         
+        case "LipIn_Out":
+        
+        if(!`objExists LipIn_Out_Grp`) {
+            CreateSlider("LipIn_Out_Slider", "Center");
+            
+            CreateTextCurves("Rod|w300|h-6","LipIn_Out");
+            move -rpr -xy 0 4.5;
+            
+            select LipIn_Out_Slider_Base_Grp LipIn_Out_Text;
+            group -name "LipIn_Out_Grp";
+            
+            move -r 12 0 0;
+            select -cl;
+        }
+        break;         
+        case "Sticky_Lips":
+        
+        if(!`objExists Sticky_Lips_Grp`) {
+            CreateSlider("Sticky_Lips_Slider", "Up");
+            
+            CreateTextCurves("Rod|w300|h-6","Sticky_Lips");
+            move -rpr -xy 0 4.5;
+            
+            select Sticky_Lips_Slider_Base_Grp Sticky_Lips_Text;
+            group -name "Sticky_Lips_Grp";
+            
+            move -r 10 -10 0;            
+        }
+        break;         
+        case "Blow" :
+        
+        if(! `objExists Blow_Grp`) {
+            CreateSlider("Blow_Slider", "Down");
+            
+            CreateTextCurves("Rod|w300|h-6","Blow");
+            move -rpr -xy 0 4.5;
+            
+            select Blow_Slider_Base_Grp Blow_Text;
+            group -name "Blow_Grp";   
+            
+            move -r 19 -10 0;      
+        }
+
+        break;         
+        case "Sync":
+        
+        if (! `objExists Sync_Grp`) {
+            CreateBaseBox("false", "Center", "Sync_Box"); 
+            
+            CreateTextCurves("Rod|w300|h-6","Sync");
+            move -rpr -xy 0 4.5;
+            
+            select Sync_Box_Base_Grp Sync_Text;
+            group -name "Sync_Grp";   
+            
+            move -r 0 -20 0;                  
+        }
+
+        break;         
+        case "F" :
+        
+        if(! `objExists F_Grp`) {
+            CreateSlider("F_Slider", "Down");
+            
+            CreateTextCurves("Rod|w300|h-6","F");
+            move -rpr -xy 0 4.5;
+            
+            select F_Slider_Base_Grp F_Text;
+            group -name "F_Grp"; 
+            
+            move -r 10 -20 0;             
+        }
+
+        break;         
+        case "Kiss":
+        
+        if (! `objExists Kiss_Grp`) {
+            CreateSlider("Kiss_Slider", "Down");
+            
+            CreateTextCurves("Rod|w300|h-6","Kiss");
+            move -rpr -xy 0 4.5;
+            
+            select Kiss_Slider_Base_Grp Kiss_Text;
+            group -name "Kiss_Grp"; 
+            
+            move -r 19 -20 0;            
+        }
+
+        break;         
+        case "Tongue":
+        
+        if(! `objExists Tongue_Grp`){
+            CreateBaseBox("false", "Center", "Tongue_Move_Box");
+            move -r -3 0 0;
+            CreateTextCurves("Rod|w300|h-6","Tongue");
+            move -rpr -xy 0 4.5;
+            CreateSlider("Tongue_Roll_Slider", "Center");
+            move -r 3 0 0;
+            
+            select Tongue_Move_Box_Base_Grp Tongue_Roll_Slider_Base_Grp Tongue_Text;
+            group -name "Tongue_Grp";
+            move -r -11 -20 0;
+        }
+        break;         
+        case "Sneer" :
+        
+        if(! `objExists Sneer_Grp`) {
+            CreateBaseBox("true", "Down","Sneer_Box");
+            CreateTextCurves("Rod|w300|h-6","Sneer");
+            move -rpr -xy 0 4.5;
+            
+            select Sneer_Box_Base_Grp Sneer_Text;
+            group -name "Sneer_Grp"; 
+            
+            move -r -14 0 0;           
+        }
+
+        break;         
+        case "SecCtrl":
+        if(! `objExists SecCtrl_Grp`) {
+            CreateSlider("SecCtrl_Slider", "Up");
+            
+            CreateTextCurves("Rod|w300|h-6","SecCtrl");
+            move -rpr -xy 0 4.5;
+            
+            select SecCtrl_Slider_Base_Grp SecCtrl_Text;
+            group -name "SecCtrl_Grp";
+            
+            move -r -16 -10 0;             
+        }
+
+        break;         
+        case "Squint":
+        if(! `objExists Squint_Grp`) {
+            CreateBaseBox("true","Down","Squint_Box");
+            
+            CreateTextCurves("Rod|w300|h-6","Squint");
+            move -rpr -xy 0 4.5;
+            
+            select Squint_Box_Base_Grp Squint_Text;
+            group -name "Squint_Grp";
+            
+            move -r 0 10 0;
+        }
+        break;         
+        case "PupilDrag":
+        
+        if(! `objExists PupilDrag_Grp`) {
+            CreateSlider("PupilDrag_R_Slider", "Down");
+            move -rpr -xy -2 0;
+            
+            CreateSlider("PupilDrag_L_Slider", "Down");
+            move -rpr -xy 2 0;
+                        
+            CreateTextCurves("Rod|w300|h-6","PupilDrag");
+            move -rpr -xy 0 4.5;
+            
+            select PupilDrag_R_Slider_Base_Grp PupilDrag_L_Slider_Base_Grp PupilDrag_Text;
+            group -name "PupilDrag_Grp";
+            move -r -14 10 0;
+        }
+        break; 
+        
+        case "Eye_Str_Sq":
+        
+        if(!`objExists Eye_Str_Sq_Grp`) {
+            CreateSlider("Eye_Str_Sq_R_Slider", "Center");
+            move -rpr -xy -2 0;
+            
+            CreateSlider("Eye_Str_Sq_L_Slider", "Center");
+            move -rpr -xy 2 0;
+                        
+            CreateTextCurves("Rod|w300|h-6","Eye_Str_Sq");
+            move -rpr -xy 0 4.5;
+            
+            select Eye_Str_Sq_R_Slider_Base_Grp Eye_Str_Sq_L_Slider_Base_Grp Eye_Str_Sq_Text;
+            group -name "Eye_Str_Sq_Grp";
+            move -r 15 10 0;            
+        }
+        break;
+    
+        case "EyePop":
+    
+        if(! `objExists EyePop_Grp`) {
+                CreateSlider("EyePop_R_Slider", "Down");
+                move -rpr -xy -2 0;
+            
+                CreateSlider("EyePop_L_Slider", "Down");
+                move -rpr -xy 2 0;
+                        
+                CreateTextCurves("Rod|w300|h-6","EyePop");
+                move -rpr -xy 0 4.5;
+            
+                select EyePop_R_Slider_Base_Grp EyePop_L_Slider_Base_Grp EyePop_Text;
+                group -name "EyePop_Grp";
+                move -r -14 30 0;          
+        }
+        break;
+        
+        case "EyeBrow":
+        
+        if(! `objExists EyeBrow_Grp`){
+            CreateSlider("EyeBrow_R1_Slider","Center");
+            move -r -6 0 0;
+            CreateSlider("EyeBrow_R2_Slider","Center");
+            move -r -4 0 0;
+            CreateSlider("EyeBrow_R3_Slider","Center");
+            move -r -2 0 0;
+            CreateSlider("EyeBrow_Center_Slider","Center");
+            move -r 0 -1 0;
+            CreateSlider("EyeBrow_L1_Slider","Center");
+            move -r 2 0 0;
+            CreateSlider("EyeBrow_L2_Slider","Center");
+            move -r 4 0 0;
+            CreateSlider("EyeBrow_L3_Slider","Center");
+            move -r 6 0 0;
+            CreateTextCurves("Rod|w300|h-6","EyeBrow");
+            move -rpr -xy 0 4.5;
+            
+            select EyeBrow_R1_Slider_Base_Grp EyeBrow_R2_Slider_Base_Grp EyeBrow_R3_Slider_Base_Grp EyeBrow_Center_Slider_Base_Grp
+                    EyeBrow_L1_Slider_Base_Grp EyeBrow_L2_Slider_Base_Grp EyeBrow_L3_Slider_Base_Grp EyeBrow_Text;
+            group -name "EyeBrow_Grp";
+            move -r 0 30 0;
+        }
+        break;
+        
+        case "PupilScale" :
+        
+        if (! `objExists PupilScale_Grp`) {
+            CreateSlider("PupilScale_L_Slider", "Center");
+            move -r 2 0 0;
+            CreateSlider("PupilScale_R_Slider","Center");
+            move -r -2 0 0;
+            CreateTextCurves("Rod|w300|h-6","PupilScale");
+            move -rpr -xy 0 4.5;
+            
+            select PupilScale_L_Slider_Base_Grp PupilScale_R_Slider_Base_Grp PupilScale_Text;
+            group -name "PupilScale_Grp";
+            move -r -14 20 0;
+            
+        }
+        break;
+        
+        case "Blink":
+        
+        if (! `objExists Blink_Grp`) {
+            CreateSlider("Blink_L_Slider", "Down" );
+            move -r 2 0 0;
+            CreateSlider("Blink_R_Slider", "Down");
+            move -r -2 0 0;
+            CreateTextCurves("Rod|w300|h-6", "Blink");
+            move -rpr -xy 0 4.5;
+            
+            select Blink_L_Slider_Base_Grp Blink_R_Slider_Base_Grp Blink_Text;
+            group -name "Blink_Grp";
+            move -r 15 20 0;
+        }
+        break;
+        
+        case "Eye":
+        
+        if(! `objExists Eye_Grp`) {
+            CreateSlider("Eye_R1_Slider", "Center");
+            move -r -7 0 0;
+            CreateSlider("Eye_R2_Slider", "Center");
+            move -r -5 0 0;
+            CreateBaseBox("false", "Center", "Eye_Box");
+            CreateSlider("Eye_L1_Slider", "Center");
+            move -r 5 0 0;
+            CreateSlider("Eye_L2_Slider", "Center");
+            move -r 7 0 0;
+            CreateTextCurves("Rod|w300|h-6" , "Eye");
+            move -rpr -xy 0 4.5;
+            
+            select Eye_L1_Slider_Base_Grp Eye_L2_Slider_Base_Grp Eye_R1_Slider_Base_Grp 
+                    Eye_R2_Slider_Base_Grp Eye_Box_Base_Grp Eye_Text;
+            group -name "Eye_Grp";
+            move -r 0 20 0;
+        }
+        break;
+    }
+}
+
+//Calls the CreateControl function for each selected Item
+proc CreateGUI(){
+    string $selecteditems[] = `textScrollList -q -allItems selectedControlsList`;
+
+    for($each in $selecteditems ) {
+        CreateControl( $each );
+    }
+}
+
+//Creates the control as per the user inputs.
+proc CreateNewControls(){
+
+    int $i;
+    int $j;
+    string $ctrlName = `textField -q -text ctrlNameText`;
+    int $numBox = `optionMenuGrp -q -value numBoxCtrlOptionGrp`;
+    int $numSlider = `optionMenuGrp -q -value numSliderCtrlOptionGrp `;
+    string $boxCtrlPos = `optionMenuGrp -q -value boxCtrlPosGrp` ;
+    string $sliderCtrlPos = `optionMenuGrp -q -value sliderCtrlPosGrp` ;
+    int $isRectInt = `checkBox -q -v isRectCheckBox`;
+    string $isRect;
+    
+    if (!(($numBox == 0) && ($numSlider == 0))) {
+    if (`objExists ($ctrlName + "_Grp")` ) {
+        error "Please enter a unique name for the control!";
+    }
+    
+    else {
+    if($isRectInt == 1){ $isRect = "true"; }
+    else { $isRect = "false"; }
+
+    CreateTextCurves("Rod|w300|h-6" , $ctrlName );
+    move -rpr -xy 0 4.5;
+    for (  $i =0;$i < $numBox ; $i ++ ) {
+       CreateBaseBox($isRect, $boxCtrlPos ,$ctrlName +"_Box"+($i+1) );
+        move -r (8*$i) 0 0;
+    }
+    
+    for (  $j =0;$j < $numSlider ; $j ++ ) {
+        CreateSlider($ctrlName + "_Slider"+($j+1) , $sliderCtrlPos );
+        move -r (6*$j) 0 0;
+    }
+    select -cl;
+    if($numBox == 0){
+    select ($ctrlName +"_Slider*_Base_Grp") ($ctrlName +"_Text");        
+    }
+    else if ($numSlider == 0) {
+    select ($ctrlName +"_Box*_Base_Grp") ($ctrlName +"_Text");        
+    }
+    else {
+    select ($ctrlName +"_Box*_Base_Grp") ($ctrlName +"_Slider*_Base_Grp") ($ctrlName +"_Text");
+    }
+    group -name ($ctrlName + "_Grp");
+    }
+    }
+}
+
+//Main Function.
+global proc rlFacialGUI(){
+    
+    if(`window -exists facialGUIWin`) {
+        deleteUI facialGUIWin;
+    }
+    
+    string $window = `window -title "Facial Gui Controls" facialGUIWin`;
+    string $availableControls[] = {"Mouth","Jaw","JawDrop","LipIn_Out","Sticky_Lips",
+                                    "Blow","Sync","Sneer","SecCtrl","F","Kiss",
+                                    "Tongue","Squint","Eye_Str_Sq","PupilDrag",
+                                    "PupilScale","Eye","Blink","EyeBrow","EyePop"};
+    
+    string $form = `formLayout`;
+    string $tabs = `tabLayout -innerMarginWidth 5 -innerMarginHeight 5`;
+    formLayout -edit
+     -attachForm $tabs "top" 5
+     -attachForm $tabs "left"   5
+     -attachForm $tabs "bottom" 5
+     -attachForm $tabs "right"  5
+     $form;
+
+    string $child1 = `rowColumnLayout -numberOfRows 7
+        -rowHeight 1 5
+        -rowHeight 2 30
+        -rowHeight 3 260
+        -rowHeight 4 5
+        -rowHeight 5 25
+        -rowHeight 6 5
+        -rowHeight 7 25 rc1`;
+        
+    text -label"";
+    text -label "\tAvailable GUI Controls";
+    textScrollList -height 240 -numberOfRows 10 -width 150 -allowMultiSelection true availableControlsList;
+    text -label "";
+    button -command "AppendSelectedItems();" -label "--->>>" -width 50;
+    text -label "";
+    button -label "Create" -width 150 -command "CreateGUI();select -cl;";
+    
+    text -label "";
+    text -label "";
+    text -label "";
+    text -label "";
+    text -label "";
+    text -label "";
+    text -label "";
+    
+    text -label "";
+    text -label "\tSelected GUI Controls";
+    textScrollList -height 240 -numberOfRows 10 -width 150 -allowMultiSelection true selectedControlsList;
+    text -label "";
+    button -command "DeleteSelectedItems();" -label "<<<---" -width 50;
+    text -label "";
+    button -label "Close" -width 150 -command "deleteUI facialGUIWin";
+    setParent..;
+    
+    string $child2 = `rowColumnLayout -nr 6 -rs 1 15 -rs 2 15 
+                        -rs 3 15 -rs 4 15 -rs 5 15 -rs 6 15`;
+
+    text -label "ControlName : ";
+    text -label "isRectangle? : ";
+    text -label "No. of Box Ctrls : ";
+    text -label "Box Ctrl Position : ";
+    text -label "";
+    text -label "";
+        
+    textField ctrlNameText;
+    checkBox -label "" isRectCheckBox;
+    optionMenuGrp -w 50 numBoxCtrlOptionGrp;
+    menuItem -label "0";
+    menuItem -label "1";
+    menuItem -label "2";
+    menuItem -label "3";
+    menuItem -label "4";
+    menuItem -label "5";
+    menuItem -label "6";
+    optionMenuGrp -w 50 boxCtrlPosGrp;
+    menuItem -label "Up";
+    menuItem -label "Down";
+    menuItem -label "Right";
+    menuItem -label "Left";
+    menuItem -label "Center";
+    text -label "";
+    button -label "Create" -command "CreateNewControls();";
+    
+    text -label "";
+    text -label "";
+    text -label "No. of Slider Ctrls : ";
+    text -label "Slider Ctrl Position : ";
+    text -label "";
+    text -label "";
+    
+    
+    text -label "";
+    text -label "";
+    optionMenuGrp -w 50 numSliderCtrlOptionGrp ;
+    menuItem -label "0";
+    menuItem -label "1";
+    menuItem -label "2";
+    menuItem -label "3";
+    menuItem -label "4";
+    menuItem -label "5";
+    menuItem -label "6";
+    optionMenuGrp  sliderCtrlPosGrp;
+    menuItem -label "Up";
+    menuItem -label "Down";
+    menuItem -label "Center";
+    text -label "";
+    button -label "Close" -command "deleteUI facialGUIWin;";
+    setParent..;
+
+    tabLayout -edit -tabLabel $child1 "Facial Controls" -tabLabel $child2 "Customize!" $tabs;
+ 
+    
+    for($each in $availableControls) {
+        textScrollList -e -append $each availableControlsList;
+    }
+
+    showWindow facialGUIWin;
+    window -e -widthHeight 402 400 facialGUIWin; 
+} rlFacialGUI();
